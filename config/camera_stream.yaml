@@ -1,0 +1,116 @@
+# *****************************************************************************
+# @file      camera_stream.yaml
+# @brief     Cấu hình camera stream siêu nhẹ cho 4 camera Arducam ISX031 trên Jetson.
+#            Tận dụng phần cứng VIC / NVENC để chuyển đổi định dạng và nén ảnh
+#            với mức tiêu thụ 0% CUDA GPU và gần như 0% CPU.
+#            Cơ chế LAZY PUBLISHING: Chỉ xử lý và đẩy dữ liệu khi CÓ SUBSCRIBER.
+# *****************************************************************************
+/camera_stream_node:
+  ros__parameters:
+    # Danh sách các camera cần mở. Thứ tự độc lập.
+    camera_names: ["front", "rear", "left", "right"]
+
+    # Thông số phần cứng cảm biến ISX031 (sự thật phần cứng từ v4l2-ctl)
+    capture:
+      width: 1920
+      height: 1536
+      framerate: 30
+
+    # Thông số xuất ra ROS topic:
+    output:
+      # Độ phân giải xuất ra (có thể giữ nguyên 1920x1536 hoặc giảm tỉ lệ bằng chip phần cứng VIC)
+      width: 640
+      height: 480
+      # Nhịp xuất khung hình (Hz). Có thể hạ xuống 15 hoặc giữ 30.
+      framerate: 15
+      # Định dạng màu xuất ra cho ROS Image: "bgra8", "rgba8", "bgr8", "rgb8", "yuy2"
+      # 💡 KHUYẾN NGHỊ: Sử dụng "bgra8" hoặc "rgba8" để chip phần cứng VIC xuất trực tiếp với 0% CPU!
+      # Nếu dùng "bgr8", pipeline sẽ dùng videoconvert trên CPU (nhưng van động sẽ tự đóng khi 0 subscriber).
+      encoding: "bgra8"
+      # Bật/tắt xuất ảnh thô (sensor_msgs/msg/Image) cho các tác vụ AI/Vision - Van đóng tự động khi không có subscriber
+      enable_raw: true
+      # Bật/tắt xuất ảnh nén phần cứng H.265/H.264 qua NVENC (sensor_msgs/msg/CompressedImage) cho RTSP / Teleop
+      enable_compressed: true
+      comp_codec: "h265"
+      comp_bitrate: 180000
+      jpeg_quality: 85
+
+    # Cấu hình Birdview System (Ghép ảnh toàn cảnh 4 camera bằng GPU CUDA + Nén HW H.265 cho RTSP)
+    birdview:
+      enable: false
+      fps: 15
+      bitrate: 250000
+      raw_topic: "/camera/birdview/raw"
+      compressed_topic: "/camera/birdview/raw/compress"
+      config_file: "config/birdview_ground.json"
+      car_image_path: "config/SwiX.png"
+
+    # Cấu hình Privacy Anonymizer (Che mờ bảo mật khuôn mặt & biển số xe bằng TensorRT 10 + CUDA Kernel)
+    # Hỗ trợ 4 chế độ độc lập: Bật cả 2, Chỉ che mặt, Chỉ che biển số, hoặc Tắt cả 2
+    anonymize:
+      # Số frames duy trì vết che mờ khi AI drop frame (Anti-Leak persistence)
+      hold_frames: 5
+      # Kích thước ô làm mờ Mosaic (pixel)
+      mosaic_size: 5
+
+      # -------------------------------------------------------------------------
+      # 1. Che mờ Khuôn mặt người (Face Anonymizer)
+      # -------------------------------------------------------------------------
+      face:
+        # BẬT / TẮT riêng tính năng che mặt (true = BẬT, false = TẮT)
+        enable: false
+        # Đường dẫn model TensorRT FP16 cho khuôn mặt
+        model_path: "models/face_model/version-RFB-320_fp16.engine"
+        # Ngưỡng tin cậy phát hiện mặt (0.15 - 0.50)
+        confidence_threshold: 0.20
+        # Ngưỡng triệt tiêu trùng lặp NMS
+        nms_threshold: 0.30
+        # Hệ số mở rộng hộp (Safety Margin để che trán/cằm/tai, mặc định 1.15x - 1.35x)
+        box_scale: 1.15
+
+      # -------------------------------------------------------------------------
+      # 2. Che mờ Biển số xe & Chữ số (Plate & Text Anonymizer)
+      # -------------------------------------------------------------------------
+      plate:
+        # BẬT / TẮT riêng tính năng che biển số xe / chữ số (true = BẬT, false = TẮT)
+        enable: false
+        # Model DBNet / PP-OCRv4 Text Detection TensorRT FP16 (chuyên nhận diện chữ, số, biển số xe mọi góc nghiêng)
+        model_path: "models/plate_model/plate_ocr_det_640_fp16.engine"
+        confidence_threshold: 0.60
+        nms_threshold: 0.35
+        box_scale: 1.15
+
+    # Cấu hình chi tiết từng camera:
+    cameras:
+      
+      
+      # Front
+      front:
+        device: "/dev/v4l/by-path/platform-tegra-capture-vi-video-index0"
+        image_topic: "/camera/front/image_raw"
+        compressed_topic: "/camera/front/image_raw/compressed"
+        # 0 là thẳng -  2 là lật 180
+        flip_method: 0
+
+      # Rear
+      rear:
+        device: "/dev/v4l/by-path/platform-tegra-capture-vi-video-index14"
+        image_topic: "/camera/rear/image_raw"
+        compressed_topic: "/camera/rear/image_raw/compressed"
+        # 0 là thẳng -  2 là lật 180
+        flip_method: 0
+      
+      # Left
+      left:
+        device: "/dev/v4l/by-path/platform-tegra-capture-vi-video-index18"
+        image_topic: "/camera/left/image_raw"
+        compressed_topic: "/camera/left/image_raw/compressed"
+        # 0 là thẳng -  2 là lật 180
+        flip_method: 0
+      # Right
+      right:
+        device: "/dev/v4l/by-path/platform-tegra-capture-vi-video-index16"
+        image_topic: "/camera/right/image_raw"
+        compressed_topic: "/camera/right/image_raw/compressed"
+        # 0 là thẳng -  2 là lật 180
+        flip_method: 0
