@@ -1,0 +1,25 @@
+{
+  "robot_id": "RBT0002",
+  "mqtt": {
+    "broker": "rynangate.com",
+    "port": 1853,
+    "username": "MQTT_Rynan",
+    "password": "Rynan@2020",
+    "base_topic": "R/ROBOTAP",
+    "reconnect_watchdog_sec": 60
+  },
+  "rtsp": {
+    "server_ip": "roboticstream.rynansaas.com",
+    "rtsp_port": 8554,
+    "webrtc_port": 8889,
+    "auto_timeout_sec": 300,
+    "target_width": 640,
+    "target_height": 480,
+    "fps": 15,
+    "bitrate": 180000,
+    "codec": "h265",
+    "user_pub": "cam_publisher",
+    "pass_pub": "publisher#Rynan@2026!#"
+    
+  }
+}
